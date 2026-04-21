@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Live QR Decoder</title>
+    <link rel="stylesheet" href="./styles.css?v=20260421-2" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <section class="hero">
+        <p class="eyebrow">Local Tool</p>
+        <h1>Live QR Decoder</h1>
+        <p class="intro">
+          Open your webcam, point it at a QR code, and this page will decode the
+          text locally in your browser.
+        </p>
+      </section>
+
+      <section class="scanner-card">
+        <div class="video-frame">
+          <video id="video" autoplay playsinline muted></video>
+          <canvas id="overlay"></canvas>
+          <div class="scan-line"></div>
+          <div id="statusBadge" class="status-badge">Camera idle</div>
+        </div>
+
+        <div class="controls">
+          <button id="startButton" type="button">Start camera</button>
+          <button id="stopButton" type="button" class="secondary" disabled>
+            Stop camera
+          </button>
+        </div>
+      </section>
+
+      <section class="result-card">
+        <div class="result-header">
+          <h2>Decoded Text</h2>
+          <button id="copyButton" type="button" class="secondary" disabled>
+            Copy
+          </button>
+        </div>
+
+        <pre id="resultText" class="result-text">No QR code detected yet.</pre>
+      </section>
+
+      <section class="result-card">
+        <div class="result-header">
+          <h2>Attendance Submit</h2>
+          <div id="requestState" class="request-state idle">Idle</div>
+        </div>
+
+        <div class="pair-list-header">
+          <label class="field-label">Student / Token Pairs</label>
+          <button id="addPairButton" type="button" class="secondary">
+            Add Pair
+          </button>
+        </div>
+
+        <div id="pairList" class="pair-list"></div>
+
+        <label class="field-label" for="tokenMode">Token Matching</label>
+        <select id="tokenMode" class="text-input select-input">
+          <option value="pair">Match same row</option>
+          <option value="all">Send all TCKN/token combinations</option>
+        </select>
+
+        <p class="helper-text">
+          Enter each student and token one after the other in the stacked list
+          below. New QR detections are sent automatically as <code>QrContent</code>.
+        </p>
+
+        <p class="helper-text">
+          In <code>Match same row</code> mode, the first student uses the first
+          token, the second student uses the second token, and so on. If only
+          one token is filled in the whole list, that same token is used for
+          every student.
+        </p>
+
+        <p class="helper-text">
+          Browser requests can send <code>Authorization</code>,
+          <code>Accept</code>, and <code>Content-Type</code>. They cannot set
+          raw <code>Cookie</code>, <code>User-Agent</code>,
+          <code>Content-Length</code>, or similar restricted headers.
+        </p>
+
+        <div class="controls compact-controls">
+          <button id="sendButton" type="button">Send current QR</button>
+        </div>
+
+        <div id="responseSummary" class="response-summary empty">
+          No request sent yet.
+        </div>
+
+        <pre id="apiResponse" class="result-text">No request sent yet.</pre>
+      </section>
+    </main>
+
+    <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
+    <script src="./app.js?v=20260421-2"></script>
+  </body>
+</html>
