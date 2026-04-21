@@ -9,6 +9,7 @@ const sendButton = document.getElementById("sendButton");
 const pairList = document.getElementById("pairList");
 const addPairButton = document.getElementById("addPairButton");
 const tokenModeInput = document.getElementById("tokenMode");
+const cookieInput = document.getElementById("cookieInput");
 const requestState = document.getElementById("requestState");
 const responseSummary = document.getElementById("responseSummary");
 const apiResponse = document.getElementById("apiResponse");
@@ -16,6 +17,7 @@ const apiResponse = document.getElementById("apiResponse");
 const overlayContext = overlay.getContext("2d");
 const attendanceEndpoint =
   "https://smartclass.halic.edu.tr/Akademisyen/ProcessQrAttendance";
+const proxyEndpoint = "/api/attendance";
 
 let stream = null;
 let animationFrameId = null;
@@ -45,6 +47,29 @@ function setApiResponse(content) {
 
 function formatResponseBody(content) {
   return typeof content === "string" ? content : JSON.stringify(content, null, 2);
+}
+
+function normalizeAuthToken(rawValue) {
+  return rawValue.replace(/^Bearer\s+/i, "").trim();
+}
+
+function normalizeCookieHeader(rawValue) {
+  const lines = rawValue
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => line.replace(/^\/\//, "").trim());
+
+  const cookieParts = lines
+    .filter((line) => /^cookie\s*:/i.test(line))
+    .map((line) => line.replace(/^cookie\s*:/i, "").trim())
+    .filter(Boolean);
+
+  if (cookieParts.length) {
+    return cookieParts.join("; ");
+  }
+
+  return rawValue.trim();
 }
 
 function renderResponseSummary(results) {
@@ -146,7 +171,7 @@ function getPairEntries() {
     pairIndex: index,
     pairLabel: `Pair ${index + 1}`,
     studentTckn: card.querySelector(".student-input").value.trim(),
-    authToken: card.querySelector(".token-input").value.trim(),
+    authToken: normalizeAuthToken(card.querySelector(".token-input").value.trim()),
   }));
 }
 
@@ -239,6 +264,8 @@ function buildSubmissionSignature(qrContent, plan) {
 
 async function submitAttendance(qrContent) {
   const plan = buildSubmissionPlan();
+  const normalizedQrContent = qrContent.trim();
+  const cookieHeader = normalizeCookieHeader(cookieInput.value);
 
   if (plan.error) {
     setRequestState("Input required", "error");
@@ -247,7 +274,14 @@ async function submitAttendance(qrContent) {
     return;
   }
 
-  const submissionSignature = buildSubmissionSignature(qrContent, plan);
+  if (!normalizedQrContent) {
+    setRequestState("QR required", "error");
+    renderResponseSummary([]);
+    setApiResponse("Scan or paste a QR first. Empty QrContent is not sent.");
+    return;
+  }
+
+  const submissionSignature = buildSubmissionSignature(normalizedQrContent, plan);
 
   if (requestInFlight || submissionSignature === lastSubmissionSignature) {
     return;
@@ -260,7 +294,7 @@ async function submitAttendance(qrContent) {
       requestId: index + 1,
       pairLabel,
       studentTckn,
-      qrContent,
+      qrContent: normalizedQrContent,
       status: "",
       ok: false,
       state: "pending",
@@ -269,15 +303,17 @@ async function submitAttendance(qrContent) {
     }))
   );
   setApiResponse({
-    endpoint: attendanceEndpoint,
+    endpoint: proxyEndpoint,
+    upstreamEndpoint: attendanceEndpoint,
     mode: plan.tokenMode,
-    qrContent,
+    qrContent: normalizedQrContent,
+    cookieIncluded: Boolean(cookieHeader),
     requestCount: plan.requests.length,
     requests: plan.requests.map(({ studentTckn, authToken, pairLabel }, index) => ({
       requestId: index + 1,
       pairLabel,
       studentTckn,
-      qrContent,
+      qrContent: normalizedQrContent,
       authTokenPreview: `${authToken.slice(0, 12)}...`,
     })),
   });
@@ -285,21 +321,20 @@ async function submitAttendance(qrContent) {
   try {
     const results = await Promise.all(
       plan.requests.map(async ({ studentTckn, authToken, pairLabel }, index) => {
-        const headers = {
-          Accept: "application/json",
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${authToken}`,
-        };
-
         try {
-          const response = await fetch(attendanceEndpoint, {
+          const response = await fetch(proxyEndpoint, {
             method: "POST",
-            mode: "cors",
-            credentials: "include",
-            headers,
+            headers: {
+              Accept: "application/json",
+              "Content-Type": "application/json",
+            },
             body: JSON.stringify({
-              QrContent: qrContent,
-              StudentTckn: studentTckn,
+              qrContent: normalizedQrContent,
+              studentTckn,
+              authToken,
+              cookieHeader,
+              requestId: index + 1,
+              pairLabel,
             }),
           });
 
@@ -316,7 +351,7 @@ async function submitAttendance(qrContent) {
             requestId: index + 1,
             pairLabel,
             studentTckn,
-            qrContent,
+            qrContent: normalizedQrContent,
             status: response.status,
             ok: response.ok,
             tokenPreview: `${authToken.slice(0, 12)}...`,
@@ -327,7 +362,7 @@ async function submitAttendance(qrContent) {
             requestId: index + 1,
             pairLabel,
             studentTckn,
-            qrContent,
+            qrContent: normalizedQrContent,
             status: 0,
             ok: false,
             tokenPreview: `${authToken.slice(0, 12)}...`,
@@ -347,8 +382,9 @@ async function submitAttendance(qrContent) {
     );
     renderResponseSummary(results);
     setApiResponse({
-      endpoint: attendanceEndpoint,
-      qrContent,
+      endpoint: proxyEndpoint,
+      upstreamEndpoint: attendanceEndpoint,
+      qrContent: normalizedQrContent,
       mode: plan.tokenMode,
       sent: successCount,
       failed: results.length - successCount,
@@ -361,7 +397,7 @@ async function submitAttendance(qrContent) {
         requestId: "batch",
         pairLabel: "Batch",
         studentTckn: "Batch",
-        qrContent,
+        qrContent: normalizedQrContent,
         status: 0,
         ok: false,
         tokenPreview: "-",
@@ -370,7 +406,7 @@ async function submitAttendance(qrContent) {
     ]);
     setApiResponse({
       message: error.message,
-      note: "If this page is running in a browser and the university server blocks cross-origin requests or expects raw Cookie/User-Agent headers, you will need a backend proxy on your own domain.",
+      note: "This app now expects a same-origin backend proxy at /api/attendance. On Vercel, make sure the API route is deployed with the frontend.",
     });
   } finally {
     requestInFlight = false;
@@ -441,6 +477,12 @@ async function startCamera() {
   }
 
   try {
+    if (!navigator.mediaDevices?.getUserMedia) {
+      throw new Error(
+        "Camera API unavailable. Open the HTTPS Vercel site in Safari and allow camera access."
+      );
+    }
+
     stream = await navigator.mediaDevices.getUserMedia({
       video: {
         facingMode: "environment",
