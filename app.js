@@ -250,7 +250,19 @@ function buildSubmissionPlan() {
   }
 
   if (!authTokens.length) {
-    return { error: "Enter at least one bearer token before scanning." };
+    return {
+      studentTckns,
+      authTokens: [],
+      tokenMode,
+      requests: entries
+        .filter((entry) => entry.studentTckn)
+        .map((entry) => ({
+          studentTckn: entry.studentTckn,
+          authToken: "",
+          pairIndex: entry.pairIndex,
+          pairLabel: entry.pairLabel,
+        })),
+    };
   }
 
   if (tokenMode === "pair") {
@@ -358,7 +370,7 @@ async function submitAttendance(qrContent) {
       status: "",
       ok: false,
       state: "pending",
-      tokenPreview: `${authToken.slice(0, 12)}...`,
+      tokenPreview: authToken ? `${authToken.slice(0, 12)}...` : "No bearer token",
       body: "Request queued...",
     }))
   );
@@ -374,7 +386,9 @@ async function submitAttendance(qrContent) {
       pairLabel,
       studentTckn,
       qrContent: normalizedQrContent,
-      authTokenPreview: `${authToken.slice(0, 12)}...`,
+      authTokenPreview: authToken
+        ? `${authToken.slice(0, 12)}...`
+        : "No bearer token",
     })),
   });
 
@@ -414,7 +428,9 @@ async function submitAttendance(qrContent) {
             qrContent: normalizedQrContent,
             status: response.status,
             ok: response.ok,
-            tokenPreview: `${authToken.slice(0, 12)}...`,
+            tokenPreview: authToken
+              ? `${authToken.slice(0, 12)}...`
+              : "No bearer token",
             body: parsedBody,
           };
         } catch (error) {
@@ -425,7 +441,9 @@ async function submitAttendance(qrContent) {
             qrContent: normalizedQrContent,
             status: 0,
             ok: false,
-            tokenPreview: `${authToken.slice(0, 12)}...`,
+            tokenPreview: authToken
+              ? `${authToken.slice(0, 12)}...`
+              : "No bearer token",
             body: error.message,
           };
         }

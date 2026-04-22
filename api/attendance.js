@@ -49,22 +49,25 @@ module.exports = async function handler(req, res) {
   const normalizedAuthToken = normalizeAuthToken(authToken);
   const normalizedCookieHeader = normalizeCookieHeader(cookieHeader);
 
-  if (!qrContent || !studentTckn || !normalizedAuthToken) {
+  if (!qrContent || !studentTckn) {
     return sendJson(res, 400, {
       success: false,
-      message: "qrContent, studentTckn, and authToken are required",
+      message: "qrContent and studentTckn are required",
     });
   }
 
   const headers = {
     accept: "application/json",
     "content-type": "application/json",
-    authorization: `Bearer ${normalizedAuthToken}`,
     "accept-language": "en-AU,en-US;q=0.9,en;q=0.8",
     "accept-encoding": "gzip, deflate, br",
     "user-agent": "SmartCampus-Mobile",
     priority: "u=3, i",
   };
+
+  if (normalizedAuthToken) {
+    headers.authorization = `Bearer ${normalizedAuthToken}`;
+  }
 
   if (normalizedCookieHeader) {
     headers.cookie = normalizedCookieHeader;
