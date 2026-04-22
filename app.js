@@ -6,6 +6,9 @@ const startButton = document.getElementById("startButton");
 const stopButton = document.getElementById("stopButton");
 const copyButton = document.getElementById("copyButton");
 const sendButton = document.getElementById("sendButton");
+const zoomControls = document.getElementById("zoomControls");
+const zoomRange = document.getElementById("zoomRange");
+const zoomValue = document.getElementById("zoomValue");
 const pairList = document.getElementById("pairList");
 const addPairButton = document.getElementById("addPairButton");
 const tokenModeInput = document.getElementById("tokenMode");
@@ -24,6 +27,8 @@ let animationFrameId = null;
 let detectedText = "";
 let lastSubmissionSignature = "";
 let requestInFlight = false;
+let cameraTrack = null;
+let zoomCapability = null;
 
 function setStatus(text) {
   statusBadge.textContent = text;
@@ -43,6 +48,61 @@ function setRequestState(text, stateClass) {
 function setApiResponse(content) {
   apiResponse.textContent =
     typeof content === "string" ? content : JSON.stringify(content, null, 2);
+}
+
+function setZoomVisibility(isVisible) {
+  zoomControls.classList.toggle("hidden", !isVisible);
+}
+
+function resetZoomControls() {
+  cameraTrack = null;
+  zoomCapability = null;
+  zoomRange.min = "1";
+  zoomRange.max = "1";
+  zoomRange.step = "0.1";
+  zoomRange.value = "1";
+  zoomRange.disabled = true;
+  zoomValue.textContent = "1.0x";
+  setZoomVisibility(false);
+}
+
+async function applyZoom(value) {
+  if (!cameraTrack || !zoomCapability) {
+    return;
+  }
+
+  const zoom = Number(value);
+
+  try {
+    await cameraTrack.applyConstraints({
+      advanced: [{ zoom }],
+    });
+    zoomValue.textContent = `${zoom.toFixed(1)}x`;
+  } catch (error) {
+    setStatus(`Zoom failed: ${error.message}`);
+  }
+}
+
+function setupZoomControls(activeTrack) {
+  resetZoomControls();
+  cameraTrack = activeTrack;
+
+  const capabilities = activeTrack.getCapabilities?.();
+  const settings = activeTrack.getSettings?.();
+  const zoom = capabilities?.zoom;
+
+  if (!zoom || typeof zoom.min !== "number" || typeof zoom.max !== "number") {
+    return;
+  }
+
+  zoomCapability = zoom;
+  zoomRange.min = String(zoom.min);
+  zoomRange.max = String(zoom.max);
+  zoomRange.step = String(zoom.step || 0.1);
+  zoomRange.value = String(settings?.zoom ?? zoom.min);
+  zoomRange.disabled = false;
+  zoomValue.textContent = `${Number(zoomRange.value).toFixed(1)}x`;
+  setZoomVisibility(true);
 }
 
 function formatResponseBody(content) {
@@ -492,6 +552,7 @@ async function startCamera() {
 
     video.srcObject = stream;
     await video.play();
+    setupZoomControls(stream.getVideoTracks()[0]);
 
     startButton.disabled = true;
     stopButton.disabled = false;
@@ -516,6 +577,7 @@ function stopCamera() {
   }
 
   stream = null;
+  resetZoomControls();
   video.srcObject = null;
   overlayContext.clearRect(0, 0, overlay.width, overlay.height);
   setStatus("Camera stopped");
@@ -538,10 +600,12 @@ async function copyResult() {
 }
 
 addPairButton.addEventListener("click", () => addPair());
+zoomRange.addEventListener("input", (event) => applyZoom(event.target.value));
 startButton.addEventListener("click", startCamera);
 stopButton.addEventListener("click", stopCamera);
 copyButton.addEventListener("click", copyResult);
 sendButton.addEventListener("click", sendCurrentQr);
 
 addPair("99834848902", "");
+resetZoomControls();
 window.addEventListener("beforeunload", stopCamera);
